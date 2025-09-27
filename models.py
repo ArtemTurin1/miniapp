@@ -1,9 +1,11 @@
-from sqlalchemy import ForeignKey, String, BigInteger, Text, Integer, Enum
+from sqlalchemy import ForeignKey, String, BigInteger, Text, Integer, Enum, Boolean, DateTime, select
 from sqlalchemy.orm import Mapped, DeclarativeBase, mapped_column
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 import enum
+from datetime import datetime
 
-engine = create_async_engine(url='sqlite+aiosqlite:///db.sqlite3', echo=True)
+DATABASE_URL = 'sqlite+aiosqlite:///db.sqlite3'
+engine = create_async_engine(url=DATABASE_URL, echo=True)
 async_session = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -20,43 +22,57 @@ class Difficulty(enum.Enum):
 
 class User(Base):
     __tablename__ = 'users'
-    
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    tg_id = mapped_column(BigInteger)
-    score: Mapped[int] = mapped_column(default=0)
-    level: Mapped[int] = mapped_column(default=1)
+    tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=True)
+    email: Mapped[str] = mapped_column(String(256), unique=True, nullable=True)
+    password_hash: Mapped[str] = mapped_column(String(256), nullable=True)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    level: Mapped[int] = mapped_column(Integer, default=1)
 
 class Problem(Base):
     __tablename__ = 'problems'
-    
+
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(Text)
     subject: Mapped[Subject] = mapped_column(Enum(Subject))
     difficulty: Mapped[Difficulty] = mapped_column(Enum(Difficulty))
     correct_answer: Mapped[str] = mapped_column(String(256))
-    points: Mapped[int] = mapped_column(default=10)
+    points: Mapped[int] = mapped_column(Integer, default=10)
 
 class UserSolution(Base):
     __tablename__ = 'user_solutions'
-    
+
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     problem_id: Mapped[int] = mapped_column(ForeignKey('problems.id'))
     user_answer: Mapped[str] = mapped_column(String(256))
-    is_correct: Mapped[bool] = mapped_column(default=False)
-    solved_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    solved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class Task(Base):
+    __tablename__ = 'tasks'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    title: Mapped[str] = mapped_column(String(256))
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 
 async def init_db():
+    """
+    Создаёт все таблицы и добавляет тестовые задачи, если их ещё нет.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
-    # Добавляем тестовые задачи
+
+    # Добавим несколько задач, если таблица problems пуста.
     async with async_session() as session:
-        # Проверяем, есть ли уже задачи
         existing = await session.scalar(select(Problem).limit(1))
         if not existing:
-            # Математические задачи
             math_problems = [
                 Problem(
                     title="Квадратное уравнение",
@@ -75,8 +91,7 @@ async def init_db():
                     points=20
                 )
             ]
-            
-            # Задачи по информатике
+
             informatics_problems = [
                 Problem(
                     title="Бинарный поиск",
@@ -95,6 +110,6 @@ async def init_db():
                     points=20
                 )
             ]
-            
+
             session.add_all(math_problems + informatics_problems)
             await session.commit()
