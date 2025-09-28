@@ -106,8 +106,33 @@ async def get_problems(subject: str = None, difficulty: str = None):
             } for p in problems
         ]
 
+# В файл services.py добавляем новую функцию и обновляем check_solution
+
+async def has_user_solved_problem(user_id: int, problem_id: int) -> bool:
+    """Проверяет, решил ли пользователь уже эту задачу"""
+    async with async_session() as session:
+        existing_solution = await session.scalar(
+            select(UserSolution).where(
+                UserSolution.user_id == user_id,
+                UserSolution.problem_id == problem_id,
+                UserSolution.is_correct == True
+            )
+        )
+        return existing_solution is not None
+
 async def check_solution(user_id: int, problem_id: int, user_answer: str):
     async with async_session() as session:
+        # Проверяем, не решил ли уже пользователь эту задачу
+        already_solved = await has_user_solved_problem(user_id, problem_id)
+        if already_solved:
+            return {
+                'correct': False,
+                'already_solved': True,
+                'message': 'Вы уже решили эту задачу ранее',
+                'points_earned': 0,
+                'new_score': 0
+            }
+
         problem = await session.scalar(select(Problem).where(Problem.id == problem_id))
         user = await session.scalar(select(User).where(User.id == user_id))
         if not problem or not user:
@@ -140,6 +165,7 @@ async def check_solution(user_id: int, problem_id: int, user_answer: str):
 
         return {
             'correct': is_correct,
+            'already_solved': False,
             'correct_answer': None if is_correct else problem.correct_answer,
             'points_earned': problem.points if is_correct else 0,
             'new_score': user.score
@@ -181,47 +207,3 @@ async def get_user_stats(user_id: int):
             'informatics_solved': int(informatics_solved)
         }
 
-# ---------------- Tasks (user to-do) ----------------
-
-async def get_tasks_for_tg(tg_id: int):
-    async with async_session() as session:
-        user = await session.scalar(select(User).where(User.tg_id == tg_id))
-        if not user:
-            return []
-        tasks = await session.scalars(select(Task).where(Task.user_id == user.id).order_by(Task.created_at.desc()))
-        return [
-            {
-                'id': t.id,
-                'title': t.title,
-                'completed': t.completed,
-                'created_at': t.created_at.isoformat()
-            } for t in tasks
-        ]
-
-async def create_task_for_tg(tg_id: int, title: str):
-    async with async_session() as session:
-        user = await session.scalar(select(User).where(User.tg_id == tg_id))
-        if not user:
-            user = await add_user(tg_id=tg_id)
-        task = Task(user_id=user.id, title=title)
-        session.add(task)
-        await session.commit()
-        await session.refresh(task)
-        return {
-            'id': task.id,
-            'title': task.title,
-            'completed': task.completed
-        }
-
-async def complete_task(task_id: int):
-    async with async_session() as session:
-        task = await session.scalar(select(Task).where(Task.id == task_id))
-        if not task:
-            return None
-        task.completed = True
-        await session.commit()
-        return {
-            'id': task.id,
-            'title': task.title,
-            'completed': task.completed
-        }

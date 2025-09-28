@@ -52,15 +52,6 @@ class UserSolution(Base):
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
     solved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-class Task(Base):
-    __tablename__ = 'tasks'
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
-    title: Mapped[str] = mapped_column(String(256))
-    completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
 
 async def init_db():
     """

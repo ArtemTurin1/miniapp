@@ -105,20 +105,3 @@ async def profile(tg_id: int):
         'level': user.level,
         'stats': stats
     }
-
-# --- Tasks (to-do) ---
-
-@app.get("/api/tasks/{tg_id}")
-async def get_tasks(tg_id: int):
-    return await services.get_tasks_for_tg(tg_id)
-
-@app.post("/api/tasks")
-async def create_task(req: TaskCreateRequest):
-    return await services.create_task_for_tg(req.tg_id, req.title)
-
-@app.patch("/api/tasks/{task_id}/complete")
-async def complete_task(task_id: int):
-    res = await services.complete_task(task_id)
-    if not res:
-        raise HTTPException(status_code=404, detail="task not found")
-    return res
