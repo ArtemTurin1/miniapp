@@ -1,5 +1,5 @@
 from sqlalchemy import select, update, delete, func, desc
-from models import async_session, User, Problem, UserSolution, Subject, Difficulty, Task
+from models import async_session, User, Problem, UserSolution, Subject, Difficulty
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from typing import List, Optional
@@ -170,7 +170,23 @@ async def check_solution(user_id: int, problem_id: int, user_answer: str):
             'points_earned': problem.points if is_correct else 0,
             'new_score': user.score
         }
+async def get_weekly_stats(user_id: int):
+    """Получает статистику решённых задач за последние 7 дней"""
+    async with async_session() as session:
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        
+        solved_count = await session.scalar(
+            select(func.count(UserSolution.id))
+            .where(
+                UserSolution.user_id == user_id,
+                UserSolution.is_correct == True,
+                UserSolution.solved_at >= week_ago
+            )
+        ) or 0
 
+        return {
+            'solved_count': int(solved_count)
+        }
 # ---------------- Stats ----------------
 
 async def get_user_stats(user_id: int):
@@ -206,4 +222,5 @@ async def get_user_stats(user_id: int):
             'math_solved': int(math_solved),
             'informatics_solved': int(informatics_solved)
         }
+    
 

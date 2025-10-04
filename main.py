@@ -105,3 +105,11 @@ async def profile(tg_id: int):
         'level': user.level,
         'stats': stats
     }
+
+@app.get("/api/stats/{tg_id}/weekly")
+async def get_weekly_stats(tg_id: int):
+    user = await services.get_user_by_tg(tg_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    stats = await services.get_weekly_stats(user.id)
+    return stats
